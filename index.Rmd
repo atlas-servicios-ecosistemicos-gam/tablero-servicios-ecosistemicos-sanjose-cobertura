@@ -1,0 +1,220 @@
+---
+title: "Servicios ecosistémicos del cantón de San José"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+#-------------------- Paquetes --------------------
+
+library(flexdashboard)
+library(dplyr)
+library(sf)
+library(leaflet)
+library(leafem)
+library(esri2sf)
+library(raster)
+library(plotly)
+
+#--------------- URL de geoservicios y archivos de datos --------------
+
+url_agfs_limite_sanjose <-
+  "https://services9.arcgis.com/RrvMEynxDB8hycVO/arcgis/rest/services/gam_limite_san_jose/FeatureServer/0"
+
+url_raster_infraestructura_verde <-
+  "https://raw.githubusercontent.com/atlas-servicios-ecosistemicos-gam/datos-infraestructura-verde/master/sanjose/IV_SAN_JOSE_WEB.TIF"
+
+#--------------- Objetos sf y raster ---------------
+
+# Límite de San José
+sf_limite_sanjose <- 
+  esri2sf(url_agfs_limite_sanjose)
+
+# Límite de San José (reproyectado a Web Mercator)
+sf_limite_sanjose_web <- 
+  sf_limite_sanjose %>%
+  st_transform(3857)
+
+# Capa raster de infraestructura verde (en Web Mercator)
+raster_infraestructura_verde <-
+  raster(url_raster_infraestructura_verde) %>%
+  aggregate(fact=c(2), fun=modal) %>% # ¡¡HAY QUE TRATAR DE ELIMINAR ESTA AGRUPACIÓN. PODRÍA FUNCIONAR AL USAR MÁS MEMORIA LINUX!!
+  crop(sf_limite_sanjose_web) %>%
+  mask(sf_limite_sanjose_web)
+
+#---------------- Paletas de colores ---------------
+
+colores_infraestructura_verde <- 
+  c(rgb(43,99,89,   maxColorValue=255), rgb(81,122,114, maxColorValue=255), 
+    rgb(52,130,100, maxColorValue=255), rgb(129,181,106,maxColorValue=255),
+    rgb(178,209,225,maxColorValue=255), rgb(177,207,117,maxColorValue=255),
+    rgb(211,176,207,maxColorValue=255), rgb(236,243,228,maxColorValue=255), 
+    rgb(204,204,204,maxColorValue=255), rgb(158,109,169,maxColorValue=255),
+    rgb(128,107,171,maxColorValue=255), rgb(69,155,122, maxColorValue=255), 
+    rgb(223,151,129,maxColorValue=255), rgb(122,173,111,maxColorValue=255), 
+    rgb(168,204,158,maxColorValue=255))
+
+etiquetas_infraestructura_verde <- 
+  c("Bosques y arbolados periurbanos", "Bosques y arbolados en riberas de ríos", 
+    "Parques y jardines pequeños", "Campos deportivos y recreativos", 
+    "Lagunas estacionales de agua dulce", "Arbolados dispersos", 
+    "Terrenos baldíos (matorrales)", "Superficie no pavimentada", 
+    "Superficie pavimentada", "Arbolados a lo largo de vías férreas", 
+    "Arbolados a lo largo de autopistas", "Pastos cultivados", 
+    "Cultivos perennes", "Cafetales arbolados",
+    "Terrenos baldíos (pastos)")
+
+values_infraestructura_verde <- 
+  c(1, 3, 
+    4, 7, 
+    8, 9, 
+    10, 11, 
+    12, 14, 
+    15, 19, 
+    20, 21, 
+    22)
+
+pal_infraestructura_verde <- 
+  colorFactor(
+    palette = colores_infraestructura_verde, 
+    domain = values_infraestructura_verde,
+    na.color = "transparent"
+  )
+
+```
+
+
+Row {data-height=600}
+-----------------------------------------------------------------------
+
+### {data-width=650}
+```{r}
+
+#------------------- Mapa ------------------
+
+leaflet() %>%
+  addProviderTiles(providers$OpenStreetMap.Mapnik, group = "OpenStreetMap") %>%
+  addProviderTiles(providers$Stamen.TonerLite, group = "Stamen Toner Lite") %>%
+  addProviderTiles(providers$CartoDB.DarkMatter, group = "CartoDB Dark Matter") %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imágenes de ESRI") %>%
+  addPolygons(
+    data = sf_limite_sanjose,
+    color = "Purple",
+    fillColor = "transparent",
+    stroke = TRUE,
+    weight = 6.0,
+    group = "Límite de San José"
+  ) %>%
+  addRasterImage(
+    raster_infraestructura_verde,
+    colors = pal_infraestructura_verde,
+    opacity = 1,
+    group = "Cobertura"
+  ) %>%
+  addLegend(
+    title = "Cobertura",
+    position = "bottomleft",
+    colors = colores_infraestructura_verde,
+    labels = etiquetas_infraestructura_verde,
+    group = "Cobertura"
+  ) %>%
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Stamen Toner Lite", "CartoDB Dark Matter", "Imágenes de ESRI"),
+    overlayGroups = c("Límite de San José", "Cobertura"),
+    options = layersControlOptions(collapsed = TRUE)    
+  ) %>%  
+  addMiniMap(
+    toggleDisplay = TRUE,
+    position = "bottomright",
+    minimized = FALSE,
+    tiles = providers$OpenStreetMap.Mapnik
+  ) %>%
+  addScaleBar(
+    position = "bottomright",
+    options = scaleBarOptions(imperial = FALSE)
+  ) %>%
+  addMouseCoordinates()
+
+```
+
+### {data-width=350}
+```{r}
+
+# Vector de clases de cobertura
+clases <- 
+  c("Superficie no pavimentada", "Superficie pavimentada", "Terrenos baldíos (pastos)",
+    "Bosques y arbolados periurbanos", "Parques y jardines pequeños", "Bosques y arbolados en riberas de ríos",
+    "Arbolados dispersos", "Campos deportivos y recreativos", "Terrenos baldíos (matorrales)",
+    "Lagunas estacionales de agua dulce", "Arbolados a lo largo de autopistas", "Arbolados a lo largo de vías ferreas")
+
+# Vector de valores
+valores <- c(36.9, 25.43, 10.76, 
+             8.15, 7.64, 7.19, 
+             2.04, 0.76, 0.76,
+             0.18, 0.14, 0.04)
+
+fig <- 
+  plot_ly(
+    x = ~valores,
+    y = ~reorder(clases, valores),
+    text = paste(valores, "%"), 
+    textposition = 'auto',
+    type = 'bar', 
+    orientation = 'h'
+  )
+
+fig <-
+  fig %>%
+  layout(
+    xaxis = list(title = ""),
+    yaxis = list(title = ""),
+    annotations = list(
+      x = 1, y = 0.1, 
+      text = "Superficie total: 4461 ha", 
+      showarrow = F, 
+      xref='paper', yref='paper', 
+      xanchor='right', yanchor='auto', 
+      xshift=0, yshift=0,
+      font=list(color="red"))
+  )
+
+fig
+
+```
+
+Row {data-height=200}
+-----------------------------------------------------------------------
+
+### Índice biótico del suelo {.value-box} {data-width=250}
+```{r}
+valueBox(
+  value = "30.0", 
+  caption = "<h4><strong>Índice biótico del suelo</strong></h4><h4><strong>SERVICIO ECOSISTÉMICO DE REGULACIÓN<br>Mitigación de escorrentía superficial</strong></h4>"
+)
+```
+
+### Superficie de tierra cultivable {.value-box} {data-width=250}
+```{r}
+valueBox(
+  value = "0.0 ha", 
+  caption = "<h4><strong>Superficie de tierra cultivable</strong></h4><h4><strong>SERVICIO ECOSISTÉMICO DE APROVISIONAMIENTO<br>Suministro de alimentos</strong></h4>"
+)
+```
+
+### Temperatura superficial promedio de la tierra {.value-box} {data-width=250}
+```{r}
+valueBox(
+  value = "44.9 °C", 
+  caption = "<h4><strong>Temperatura superficial promedio de la tierra</strong></h4><h4><strong>SERVICIO ECOSISTÉMICO DE REGULACIÓN<br>Regulación de temperatura urbana</strong></h4>"
+)
+```
+
+### Superficie de humedales {.value-box} {data-width=250}
+```{r}
+valueBox(
+  value = "8.1 m2", 
+  caption = "<h4><strong>Superficie de humedales</strong></h4><h4><strong>SERVICIO ECOSISTÉMICO DE APROVISIONAMIENTO<br>Agua subterránea para fines no potables</strong></h4>"
+)
+```
