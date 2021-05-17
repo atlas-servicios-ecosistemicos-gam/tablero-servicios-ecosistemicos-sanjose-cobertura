@@ -13,6 +13,8 @@ library(flexdashboard)
 library(dplyr)
 library(sf)
 library(leaflet)
+library(leaflet.extras)
+library(leaflet.opacity)
 library(leafem)
 library(esri2sf)
 library(raster)
@@ -109,6 +111,7 @@ leaflet() %>%
   ) %>%
   addRasterImage(
     raster_infraestructura_verde,
+    layerId = "raster",    
     colors = pal_infraestructura_verde,
     opacity = 1,
     group = "Cobertura"
@@ -135,8 +138,10 @@ leaflet() %>%
     position = "bottomright",
     options = scaleBarOptions(imperial = FALSE)
   ) %>%
-  addMouseCoordinates()
-
+  addMouseCoordinates() %>%
+  addSearchOSM() %>%
+  addResetMapButton() %>%
+  addOpacitySlider(layerId = "raster")
 ```
 
 ### {data-width=350}
